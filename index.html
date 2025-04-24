@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AR Примерка Кольца</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; }
+    canvas { display: block; }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      border-radius: 10px;
+    }
+    #ui select, #ui button {
+      font-size: 16px;
+      padding: 6px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <select id="fingerSelect">
+      <option value="8">Указательный палец</option>
+      <option value="12">Средний палец</option>
+      <option value="16">Безымянный палец</option>
+      <option value="20">Мизинец</option>
+    </select>
+    <button id="changeRing">Сменить кольцо</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://cdn.skypack.dev/three';
+    import { GLTFLoader } from 'https://cdn.skypack.dev/three/examples/jsm/loaders/GLTFLoader.js';
+    import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+    import { Hands } from 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 100);
+    camera.position.z = 2;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 2, 2);
+    light.castShadow = true;
+    scene.add(light);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+
+    const loader = new GLTFLoader();
+    let ring;
+
+    loader.load('decorated_ring.glb', (gltf) => {
+      ring = gltf.scene;
+      ring.scale.set(0.01, 0.01, 0.01);
+      scene.add(ring);
+    });
+
+    const video = document.createElement('video');
+    video.style.display = 'none';
+    document.body.appendChild(video);
+
+    const hand = new Hands({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hand.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    let selectedFingerIndex = 8;
+
+    hand.onResults(results => {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0 && ring) {
+        const landmark = results.multiHandLandmarks[0][selectedFingerIndex];
+        ring.position.set(
+          (landmark.x - 0.5) * 2,
+          -(landmark.y - 0.5) * 2,
+          -landmark.z * 2
+        );
+        ring.rotation.set(0, 0, 0);
+      }
+    });
+
+    const cam = new Camera(video, {
+      onFrame: async () => {
+        await hand.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+    cam.start();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    document.getElementById('fingerSelect').addEventListener('change', (e) => {
+      selectedFingerIndex = parseInt(e.target.value);
+    });
+
+    document.getElementById('changeRing').addEventListener('click', () => {
+      alert('Пока загружено только одно кольцо. Можно добавить больше!');
+    });
+  </script>
+</body>
+</html>
